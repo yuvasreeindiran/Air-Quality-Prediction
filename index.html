@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Wildfire Risk Prediction</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background: linear-gradient(120deg, #6f42c1, #007bff);
+            min-height: 100vh;
+            color: #fff;
+        }
+        .card {
+            border-radius: 20px;
+            box-shadow: 0px 5px 15px rgba(0,0,0,0.2);
+        }
+        .btn-custom {
+            border-radius: 25px;
+            padding: 10px 20px;
+            font-weight: bold;
+        }
+        h1, h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.15);
+        }
+        canvas {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <h1>🔥 Wildfire Risk Prediction System</h1>
+        <div class="row mt-4">
+            <!-- Train Section -->
+            <div class="col-md-6">
+                <div class="card p-4 bg-dark text-white">
+                    <h2>Train Model</h2>
+                    <button id="train-btn" class="btn btn-success btn-custom w-100">Train RandomForest Model</button>
+                    <div id="trainResult" class="result-box"></div>
+                </div>
+            </div>
+
+            <!-- Prediction Section -->
+            <div class="col-md-6">
+                <div class="card p-4 bg-dark text-white">
+                    <h2>Predict Risk</h2>
+                    <form id="predictForm">
+                        <div id="featuresInput"></div>
+                        <button type="submit" class="btn btn-warning btn-custom w-100 mt-3">Predict</button>
+                    </form>
+                    <div id="predictResult" class="result-box"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Section -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card p-4 bg-dark text-white">
+                    <h2>Feature Importance</h2>
+                    <button id="metricsBtn" class="btn btn-info btn-custom w-100">Show Feature Importance</button>
+                    <div id="metricsResult" class="result-box"></div>
+                    <canvas id="metricsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let features = [];
+        let chartInstance = null;
+
+        // Train Model
+document.getElementById('train-btn').addEventListener('click', function() {
+        console.log('Train button clicked'); // Debug log
+        fetch('/api/train', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            console.log('Response received:', response); // Debug log
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Data received:', data); // Debug log
+            if (data.status === 'success') {
+                alert('Model trained successfully! Metrics: ' + JSON.stringify(data.metrics));
+            } else {
+                alert('Error training model: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error during fetch:', error); // Debug log
+            alert('Failed to train model: ' + error);
+        });
+    });
+
+        // Predict
+        document.getElementById("predictForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            let jsonData = {};
+            formData.forEach((value, key) => jsonData[key] = value);
+
+            const res = await fetch("/api/predict", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(jsonData)
+            });
+            const data = await res.json();
+
+            if (data.status === "success") {
+                document.getElementById("predictResult").innerHTML = `
+                    <p><b>Prediction:</b> ${data.prediction.toFixed(2)}</p>
+                    <p><b>Risk Level:</b> ${data.risk_status}</p>
+                `;
+            } else {
+                document.getElementById("predictResult").innerHTML = `<p class="text-danger">${data.message}</p>`;
+            }
+        });
+
+        // Show Feature Importance with Chart
+        document.getElementById("metricsBtn").addEventListener("click", async () => {
+            const res = await fetch("/api/metrics");
+            const data = await res.json();
+
+            if (data.status === "success") {
+                let labels = Object.keys(data.feature_importance);
+                let values = Object.values(data.feature_importance);
+
+                // Destroy old chart if exists
+                if (chartInstance) {
+                    chartInstance.destroy();
+                }
+
+                // Create new chart
+                const ctx = document.getElementById("metricsChart").getContext("2d");
+                chartInstance = new Chart(ctx, {
+                    type: "bar",
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: "Feature Importance",
+                            data: values,
+                            backgroundColor: "rgba(255, 193, 7, 0.7)",
+                            borderColor: "rgba(255, 193, 7, 1)",
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { enabled: true }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+                document.getElementById("metricsResult").innerHTML = "<p>Chart generated successfully ✅</p>";
+            } else {
+                document.getElementById("metricsResult").innerHTML = `<p class="text-danger">${data.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>
